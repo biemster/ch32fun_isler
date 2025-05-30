@@ -2,12 +2,16 @@
 #include "isler.h"
 #include <stdio.h>
 
-#define LED               PA9
+#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+#define LED PA9
+#else
+#define LED PA8
+#endif
 #define LL_TX_POWER_0_DBM 0x12
 
 uint8_t adv[] = {0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // MAC (reversed)
-				 0x03, 0x19, 0x00, 0x00, // 0x19: "Appearance", 0x00, 0x00: "Unkown"
-				 0x06, 0x09, 'R', 'X', ':', '?', '?'}; // 0x09: "Complete local name"
+				 0x03, 0x19, 0x00, 0x00, // 0x19: "Appearance", 0x00, 0x00: "Unknown"
+				 0x06, 0x09, 'R', 'X', ':', '?', '?'}; // 0x09: "Complete Local Name"
 uint8_t adv_channels[] = {37,38,39};
 uint8_t hex_lut[] = "0123456789ABCDEF";
 

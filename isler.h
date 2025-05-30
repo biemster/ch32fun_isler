@@ -35,9 +35,14 @@ typedef struct{
 	volatile uint32_t BB8;
 	volatile uint32_t BB9;
 	volatile uint32_t BB10;
+#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+	volatile uint32_t CTRL_TX;
+#else
 	volatile uint32_t BB11;
+#endif
 	volatile uint32_t BB12;
 
+#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
 	// default, pre TX is a4000009
 	// bit 0: Set normally, but cleared in software when TXing (maybe a ready bit?)
 	// bit 1: Unset normally, but cleared anyway by software when TXing (maybe a fault bit?)
@@ -48,6 +53,9 @@ typedef struct{
 	// bits 24-30: TX Power.  Normally 0xA4
 	// Oddly, bit 31 seems to maybe be always set.
 	volatile uint32_t CTRL_TX;
+#else
+	volatile uint32_t BB13;
+#endif
 	volatile uint32_t BB14;
 	volatile uint32_t BB15;
 	volatile uint32_t BB16;
@@ -105,8 +113,10 @@ typedef struct{
 	volatile uint32_t TMR;
 	volatile uint32_t LL26;
 	volatile uint32_t LL27;
+#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
 	volatile uint32_t LL28;
 	volatile uint32_t LL29;
+#endif
 	volatile uint32_t FRAME_BUF;
 	volatile uint32_t STATE_BUF;
 } LL_Type;
@@ -179,18 +189,63 @@ void DevInit(uint8_t TxPower) {
 	LL->LL5 = 0x8c;
 	LL->LL7 = 0x76;
 	LL->LL9 = 0x8c;
-	LL->LL11 = 0x6c;
 	LL->LL13 = 0x8c;
-	LL->LL15 = 0x6c;
 	LL->LL17 = 0x8c;
 	LL->LL19 = 0x76;
+	LL->STATE_BUF = (uint32_t)LLE_BUF;
+#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+	LL->LL11 = 0x3c;
+	LL->LL15 = 0x3c;
+	LL->INT_EN = 0xf00f;
+#else
+	LL->LL11 = 0x6c;
+	LL->LL15 = 0x6c;
 	LL->LL1 = 0x78;
 	LL->LL21 = 0;
-	LL->STATE_BUF = (uint32_t)LLE_BUF;
-	LL->STATUS = 0xffffffff;
 	LL->INT_EN = 0x16000f;
+#endif
+	LL->STATUS = 0xffffffff;
 
 	RF->RF10 = 0x480;
+#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+	RF->RF18 = RF->RF18 & 0x8fffffff | 0x20000000;
+	RF->RF18 = RF->RF18 & 0xf8ffffff | 0x4000000;
+	RF->RF18 = RF->RF18 & 0xfffffff0 | 9;
+	RF->RF18 &= 0xfff8ffff;
+	RF->RF18 |= 0x80000000;
+	RF->RF19 = RF->RF19 & 0xfffffff8 | 3;
+	RF->RF19 = RF->RF19 & 0xffffff8f | 0x30;
+	RF->RF19 = RF->RF19 & 0xfffff8ff | 0x300;
+	RF->RF19 &= 0xfeffffff;
+	RF->RF19 |= 0x2000000;
+	RF->RF20 = RF->RF20 & 0xffff0fff | 0x4000;
+	RF->RF21 = RF->RF21 & 0xfffffff0 | 0xc;
+	RF->RF21 |= 0x80;
+	RF->RF21 &= 0xffffefff;
+	RF->RF15 = RF->RF15 & 0xffff0fff | 0x8000;
+	RF->RF15 = RF->RF15 & 0xf8ffffff | 0x2000000;
+	RF->RF15 = RF->RF15 & 0x1fffffff | 0x40000000;
+	RF->RF11 |= 0x700000;
+	RF->RF11 &= 0xf8ffffff;
+	RF->RF11 = RF->RF11 & 0xffffcfff | 0x2000;
+	RF->RF11 = RF->RF11 & 0xfffcffff | 0x20000;
+	RF->RF12 &= 0xfffffff0;
+	RF->RF12 &= 0xffffff0f;
+	RF->RF12 &= 0xfffff8ff;
+	RF->RF12 |= 0x700000;
+	RF->RF12 = RF->RF12 & 0x8fffffff | 0x50000000;
+	RF->TXTUNE_CTRL = RF->TXTUNE_CTRL & 0xff07ffff | 0x880000;
+	RF->TXTUNE_CTRL |= 0x80000000;
+
+	BB->CTRL_CFG |= 0x800000;
+	BB->CTRL_CFG |= 0x10000000;
+	BB->BB13 = 0x1d0;
+	BB->CTRL_TX = TxPower << 0x19 | 0x80010e78;
+	BB->CTRL_TX = (BB->CTRL_TX & 0x81ffffff) | (TxPower & 0x3f) << 0x19;
+	BB->BB8 = 0x90083;
+
+	NVIC->VTFADDR[3] = 0x200011cb;
+#else
 	RF->RF12 &= 0xfff9ffff;
 	RF->RF12 |= 0x70000000;
 	RF->RF15 = (RF->RF15 & 0xf8ffffff) | 0x2000000;
@@ -202,14 +257,25 @@ void DevInit(uint8_t TxPower) {
 
 	BB->BB14 = 0x2020c;
 	BB->BB15 = 0x50;
-
-	NVIC->VTFIDR[3] = 0x14;
-
 	BB->CTRL_TX = (BB->CTRL_TX & 0x1ffffff) | (TxPower | 0x40) << 0x19;
 	BB->CTRL_CFG &= 0xfffffcff;
+#endif
+	NVIC->VTFIDR[3] = 0x14;
 }
 
 void DevSetMode(uint16_t mode) {
+#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+	if(mode) {
+		BB->CTRL_CFG &= 0xffffcfff;
+		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffe7f) | 0x100;
+		RF->RF2 |= 0x330000;
+	}
+	else {
+		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffe7f) | 0x80;
+		RF->RF2 &= 0xffcdffff;
+	}
+	LL->CTRL_MOD = mode;
+#else
 	if(mode) {
 		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffcffff) | 0x20000;
 		RF->RF2 |= 0x330000;
@@ -219,6 +285,7 @@ void DevSetMode(uint16_t mode) {
 		RF->RF2 &= 0xffcdffff;
 	}
 	LL->CTRL_MOD = (0x30000 | mode);
+#endif
 }
 
 uint32_t RFEND_TXCTune(uint8_t channel) {
@@ -347,10 +414,17 @@ void RFEND_RXTune() {
 }
 
 void RegInit() {
+#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+	DevSetMode(0xdd);
+	RFEND_TXTune();
+	RFEND_RXTune();
+	DevSetMode(0x80);
+#else
 	DevSetMode(0x0558);
 	RFEND_TXTune();
 	RFEND_RXTune();
 	DevSetMode(0);
+#endif
 }
 
 void RFCoreInit(uint8_t TxPower) {
