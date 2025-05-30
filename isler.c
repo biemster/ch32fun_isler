@@ -9,6 +9,7 @@ uint8_t adv[] = {0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // MAC (reversed)
 				 0x03, 0x19, 0x00, 0x00, // 0x19: "Appearance", 0x00, 0x00: "Unkown"
 				 0x06, 0x09, 'R', 'X', ':', '?', '?'}; // 0x09: "Complete local name"
 uint8_t adv_channels[] = {37,38,39};
+uint8_t hex_lut[] = "0123456789ABCDEF";
 
 void blink(int n) {
 	for(int i = n-1; i >= 0; i--) {
@@ -20,22 +21,24 @@ void blink(int n) {
 }
 
 void incoming_frame_handler() {
-	uint8_t len = ((uint8_t*)LLE_BUF)[1];
-	printf("RSSI:%d len:%d MAC:", ((uint8_t*)LLE_BUF)[0], len);
+	uint8_t *frame = (uint8_t*)LLE_BUF;
+	printf("RSSI:%d len:%d MAC:", frame[0], frame[1]);
 	for(int i = 7; i > 2; i--) {
-		printf("%02x:", ((uint8_t*)LLE_BUF)[i]);
+		printf("%02x:", frame[i]);
 	}
-	printf("%02x data:", ((uint8_t*)LLE_BUF)[2]);
-	for(int i = 8; i < len +2; i++) {
-		printf("%02x ", ((uint8_t*)LLE_BUF)[i]);
+	printf("%02x data:", frame[2]);
+	for(int i = 8; i < frame[1] +2; i++) {
+		printf("%02x ", frame[i]);
 	}
 	printf("\n");
 
-	// advertise a reception
-	adv[sizeof(adv) -2] = (((uint8_t*)LLE_BUF)[7] << 4) + '0';
-	adv[sizeof(adv) -1] = (((uint8_t*)LLE_BUF)[7] & 0xf) + '0';
-	for(int c = 0; c < sizeof(adv_channels); c++) {
-		Frame_TX(adv, sizeof(adv), adv_channels[c]);
+	// advertise reception of a FindMy frame
+	if(frame[8] == 0x1e && frame[10] == 0x4c) {
+		adv[sizeof(adv) -2] = hex_lut[(frame[7] >> 4)];
+		adv[sizeof(adv) -1] = hex_lut[(frame[7] & 0xf)];
+		for(int c = 0; c < sizeof(adv_channels); c++) {
+			Frame_TX(adv, sizeof(adv), adv_channels[c]);
+		}
 	}
 }
 

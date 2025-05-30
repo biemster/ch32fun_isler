@@ -430,7 +430,7 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 
 	BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffcff) | 0x100;
 
-	// Confiugre 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
+	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
 	// Note: There's probably something else that must be set if in 2MHz mode.
 	BB->BB9 = (BB->BB9 & 0xf9ffffff) | 0x2000000;
 
