@@ -37,13 +37,13 @@ void incoming_frame_handler() {
 	printf("\n");
 
 	// advertise reception of a FindMy frame
-	if(frame[8] == 0x1e && frame[10] == 0x4c) {
-		adv[sizeof(adv) -2] = hex_lut[(frame[7] >> 4)];
-		adv[sizeof(adv) -1] = hex_lut[(frame[7] & 0xf)];
-		for(int c = 0; c < sizeof(adv_channels); c++) {
-			Frame_TX(adv, sizeof(adv), adv_channels[c]);
-		}
-	}
+	//if(frame[8] == 0x1e && frame[10] == 0x4c) {
+	//	adv[sizeof(adv) -2] = hex_lut[(frame[7] >> 4)];
+	//	adv[sizeof(adv) -1] = hex_lut[(frame[7] & 0xf)];
+	//	for(int c = 0; c < sizeof(adv_channels); c++) {
+	//		Frame_TX(adv, sizeof(adv), adv_channels[c]);
+	//	}
+	//}
 }
 
 int main()

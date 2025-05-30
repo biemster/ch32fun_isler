@@ -26,8 +26,13 @@ typedef struct{
 	volatile uint32_t CTRL_CFG;
 
 	volatile uint32_t CRCINIT1;
+#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
 	volatile uint32_t CRCPOLY1;
 	volatile uint32_t ACCESSADDRESS1;
+#else
+	volatile uint32_t ACCESSADDRESS1;
+	volatile uint32_t BB3;
+#endif
 	volatile uint32_t BB4;
 	volatile uint32_t BB5;
 	volatile uint32_t BB6;
@@ -208,33 +213,33 @@ void DevInit(uint8_t TxPower) {
 
 	RF->RF10 = 0x480;
 #if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
-	RF->RF18 = RF->RF18 & 0x8fffffff | 0x20000000;
-	RF->RF18 = RF->RF18 & 0xf8ffffff | 0x4000000;
-	RF->RF18 = RF->RF18 & 0xfffffff0 | 9;
+	RF->RF18 = (RF->RF18 & 0x8fffffff) | 0x20000000;
+	RF->RF18 = (RF->RF18 & 0xf8ffffff) | 0x4000000;
+	RF->RF18 = (RF->RF18 & 0xfffffff0) | 9;
 	RF->RF18 &= 0xfff8ffff;
 	RF->RF18 |= 0x80000000;
-	RF->RF19 = RF->RF19 & 0xfffffff8 | 3;
-	RF->RF19 = RF->RF19 & 0xffffff8f | 0x30;
-	RF->RF19 = RF->RF19 & 0xfffff8ff | 0x300;
+	RF->RF19 = (RF->RF19 & 0xfffffff8) | 3;
+	RF->RF19 = (RF->RF19 & 0xffffff8f) | 0x30;
+	RF->RF19 = (RF->RF19 & 0xfffff8ff) | 0x300;
 	RF->RF19 &= 0xfeffffff;
 	RF->RF19 |= 0x2000000;
-	RF->RF20 = RF->RF20 & 0xffff0fff | 0x4000;
-	RF->RF21 = RF->RF21 & 0xfffffff0 | 0xc;
+	RF->RF20 = (RF->RF20 & 0xffff0fff) | 0x4000;
+	RF->RF21 = (RF->RF21 & 0xfffffff0) | 0xc;
 	RF->RF21 |= 0x80;
 	RF->RF21 &= 0xffffefff;
-	RF->RF15 = RF->RF15 & 0xffff0fff | 0x8000;
-	RF->RF15 = RF->RF15 & 0xf8ffffff | 0x2000000;
-	RF->RF15 = RF->RF15 & 0x1fffffff | 0x40000000;
+	RF->RF15 = (RF->RF15 & 0xffff0fff) | 0x8000;
+	RF->RF15 = (RF->RF15 & 0xf8ffffff) | 0x2000000;
+	RF->RF15 = (RF->RF15 & 0x1fffffff) | 0x40000000;
 	RF->RF11 |= 0x700000;
 	RF->RF11 &= 0xf8ffffff;
-	RF->RF11 = RF->RF11 & 0xffffcfff | 0x2000;
-	RF->RF11 = RF->RF11 & 0xfffcffff | 0x20000;
+	RF->RF11 = (RF->RF11 & 0xffffcfff) | 0x2000;
+	RF->RF11 = (RF->RF11 & 0xfffcffff) | 0x20000;
 	RF->RF12 &= 0xfffffff0;
 	RF->RF12 &= 0xffffff0f;
 	RF->RF12 &= 0xfffff8ff;
 	RF->RF12 |= 0x700000;
-	RF->RF12 = RF->RF12 & 0x8fffffff | 0x50000000;
-	RF->TXTUNE_CTRL = RF->TXTUNE_CTRL & 0xff07ffff | 0x880000;
+	RF->RF12 = (RF->RF12 & 0x8fffffff) | 0x50000000;
+	RF->TXTUNE_CTRL = (RF->TXTUNE_CTRL & 0xff07ffff) | 0x880000;
 	RF->TXTUNE_CTRL |= 0x80000000;
 
 	BB->CTRL_CFG |= 0x800000;
@@ -451,12 +456,13 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	DevSetMode(0x0258);
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address
-	BB->ACCESSADDRESS2 = 0x8E89BED6;
 	BB->CRCINIT1 = 0x555555; // crc init
+#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+	BB->ACCESSADDRESS2 = 0x8E89BED6;
 	BB->CRCINIT2 = 0x555555;
 	BB->CRCPOLY1 = (BB->CRCPOLY1 & 0xff000000) | 0x80032d; // crc poly
 	BB->CRCPOLY2 = (BB->CRCPOLY2 & 0xff000000) | 0x80032d;
-
+#endif
 	LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // Unknown why this needs to happen.
 
 	ADV_BUF[0] = 0x02; // PDU 0x00, 0x02, 0x06 seem to work, with only 0x02 showing up on the phone
@@ -493,13 +499,28 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 
 void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	if(LL->LL0 & 3) {
+#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+		LL->CTRL_MOD &= 0xfffffff8;
+#else
 		LL->CTRL_MOD &= 0xfffff8ff;
+#endif
 		LL->LL0 |= 0x08;
 	}
 	LL->TMR = 0;
 
 	DevSetChannel(channel);
 
+#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+	BB->CTRL_CFG = (BB->CTRL_CFG & 0xffffcfff) | 0x1000; // 1M, the following values depend on this (from BLE_SetPHYRxMode)
+	BB->BB4 = 0x3722d0;
+	BB->BB5 = 0x8101901;
+	BB->BB6 = 0x31624;
+	BB->BB8 = 0x90083;
+	BB->BB9 = 0x1006310;
+	BB->BB10 = 0x28be;
+
+	DevSetMode(0xd9);
+#else
 	DevSetMode(0x0158);
 
 	BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffcff) | 0x100;
@@ -511,13 +532,16 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	RF->RF20 = (RF->RF20 & 0xffffffe0) | (tuneFilter & 0x1f);
 	BB->BB5 = (BB->BB5 & 0xffffffc0) | 0xb;
 	BB->BB7 = (BB->BB7 & 0xfffffc00) | 0x9c;
+#endif
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address
-	BB->ACCESSADDRESS2 = 0x8E89BED6;
 	BB->CRCINIT1 = 0x555555; // crc init
+#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+	BB->ACCESSADDRESS2 = 0x8E89BED6;
 	BB->CRCINIT2 = 0x555555;
 	BB->CRCPOLY1 = (BB->CRCPOLY1 & 0xff000000) | 0x80032d; // crc poly
 	BB->CRCPOLY2 = (BB->CRCPOLY2 & 0xff000000) | 0x80032d;
+#endif
 
 	LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // Unknown why this needs to happen.
 	LL->FRAME_BUF = (uint32_t)frame_info;
