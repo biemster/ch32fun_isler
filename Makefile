@@ -1,6 +1,6 @@
 all : flash
 
-TARGET:=rx
+TARGET:=isler
 TARGET_MCU:=CH570
 TARGET_MCU_PACKAGE:=CH570D
 
