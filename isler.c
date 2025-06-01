@@ -2,7 +2,7 @@
 #include "isler.h"
 #include <stdio.h>
 
-#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+#if CH570_CH572 // this comes from isler.h, not ch32fun
 #define LED PA9
 #else
 #define LED PA8
@@ -58,6 +58,10 @@ int main()
 
 	blink(5);
 	printf(".~ ch32fun ISLER ~.\n");
+
+	for(int c = 0; c < sizeof(adv_channels); c++) {
+		Frame_TX(adv, sizeof(adv), adv_channels[c]);
+	}
 
 	while(1) {
 		Frame_RX(frame_info, 37);

@@ -185,10 +185,24 @@ volatile uint32_t rx_ready;
 
 __attribute__((interrupt))
 void LLE_IRQHandler() {
-	LL->STATUS &= LL->INT_EN;
-	BB->CTRL_TX = (BB->CTRL_TX & 0xfffffffc) | 1;
+	printf("LL\n");
+#if CH582_CH583
+	if((LL->STATUS & (1<<14)) && (LL->INT_EN & (1<<14))) {
+		LL->LL26 = 0xffffffff;
+		LL->STATUS = 0x4000;
+	}
+	else
+#endif
+	{
+		LL->STATUS &= LL->INT_EN;
+		BB->CTRL_TX = (BB->CTRL_TX & 0xfffffffc) | 1;
+	}
 	DevSetMode(0);
+#if CH582_CH583
+	LL->CTRL_MOD &= 0xfffffff8;
+#else
 	LL->CTRL_MOD &= 0xfffff8ff;
+#endif
 	LL->LL0 |= 0x08;
 	rx_ready = 1;
 }
@@ -277,12 +291,13 @@ void DevSetMode(uint16_t mode) {
 		BB->CTRL_CFG &= 0xffffcfff;
 		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffe7f) | 0x100;
 		RF->RF2 |= 0x330000;
+		LL->CTRL_MOD = mode;
 	}
 	else {
 		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffe7f) | 0x80;
 		RF->RF2 &= 0xffcdffff;
+		LL->CTRL_MOD = 0x80;
 	}
-	LL->CTRL_MOD = mode;
 #else
 	if(mode) {
 		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffcffff) | 0x20000;
@@ -423,16 +438,13 @@ void RFEND_RXTune() {
 
 void RegInit() {
 #if CH582_CH583
-	DevSetMode(0xdd);
-	RFEND_TXTune();
-	RFEND_RXTune();
-	DevSetMode(0x80);
+	DevSetMode(0x00dd);
 #else
 	DevSetMode(0x0558);
+#endif
 	RFEND_TXTune();
 	RFEND_RXTune();
 	DevSetMode(0);
-#endif
 }
 
 void RFCoreInit(uint8_t TxPower) {
@@ -449,14 +461,20 @@ void DevSetChannel(uint8_t channel) {
 
 void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	__attribute__((aligned(4))) uint8_t  ADV_BUF[len+2]; // for the advertisement, which is 37 bytes + 2 header bytes
-
+#if CH582_CH583
+	DevSetMode(0);
+#endif
 	BB->CTRL_TX = (BB->CTRL_TX & 0xfffffffc) | 1;
 
 	DevSetChannel(channel);
 
 	// Uncomment to disable whitening to debug RF.
 	//BB->CTRL_CFG |= (1<<6);
+#if CH582_CH583
+	DevSetMode(0x00da);
+#else
 	DevSetMode(0x0258);
+#endif
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address
 	BB->CRCINIT1 = 0x555555; // crc init
@@ -466,7 +484,7 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	BB->CRCPOLY1 = (BB->CRCPOLY1 & 0xff000000) | 0x80032d; // crc poly
 	BB->CRCPOLY2 = (BB->CRCPOLY2 & 0xff000000) | 0x80032d;
 #endif
-	LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // Unknown why this needs to happen.
+	LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // The "| 1" is for AUTO mode, to swap between RX <-> TX when either happened
 
 	ADV_BUF[0] = 0x02; // PDU 0x00, 0x02, 0x06 seem to work, with only 0x02 showing up on the phone
 	ADV_BUF[1] = len ;
@@ -477,30 +495,49 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	for( int timeout = 3000; !(RF->RF26 & 0x1000000) && timeout >= 0; timeout-- );
 
 	//PHYSetTxMode(len);
+#if CH582_CH583
+	BB->CTRL_CFG = (BB->CTRL_CFG & 0xffff0fff) | 0x1000;
+#else
 	BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffcff) | 0x100;
+#endif
 
-	// Confiugre 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
+	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
 	// Note: There's probably something else that must be set if in 2MHz mode.
 	BB->BB9 = (BB->BB9 & 0xf9ffffff) | 0x2000000;
 
 	// This clears bit 17 (If set, seems to have no impact.)
 	LL->LL4 &= 0xfffdffff;
 
+#if CH582_CH583
+	LL->STATUS = 0x2000;
+#else
 	LL->STATUS = 0x20000;
+#endif
 	LL->TMR = (uint32_t)(((len *8) + 0xee) *2);
 
+#if CH582_CH583
+	BB->CTRL_CFG |= 0x800000;
+#else
 	BB->CTRL_CFG |= 0x1000000;
+#endif
 	BB->CTRL_TX &= 0xfffffffc;
 
 	LL->LL0 = 2; // Not sure what this does, but on RX it's 1
 
 	while(LL->TMR); // wait for tx buffer to empty
 	DevSetMode(0);
-	LL->CTRL_MOD &= 0xfffff8ff;
-	LL->LL0 |= 0x08;
+	if(LL->LL0 & 3) {
+#if CH582_CH583
+		LL->CTRL_MOD &= 0xfffffff8;
+#else
+		LL->CTRL_MOD &= 0xfffff8ff;
+#endif
+		LL->LL0 |= 0x08;
+	}
 }
 
 void Frame_RX(uint8_t frame_info[], uint8_t channel) {
+	DevSetMode(0);
 	if(LL->LL0 & 3) {
 #if CH582_CH583
 		LL->CTRL_MOD &= 0xfffffff8;
@@ -522,7 +559,7 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	BB->BB9 = 0x1006310;
 	BB->BB10 = 0x28be;
 
-	DevSetMode(0xd9);
+	DevSetMode(0x00d9);
 #else
 	DevSetMode(0x0158);
 
@@ -532,7 +569,7 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	// Note: There's probably something else that must be set if in 2MHz mode.
 	BB->BB9 = (BB->BB9 & 0xf9ffffff) | 0x2000000;
 
-	RF->RF20 = (RF->RF20 & 0xffffffe0) | (tuneFilter & 0x1f);
+	RF->RF20 = (RF->RF20 & 0xffffffe0) | (tuneFilter & 0x1f); // Already done in RXTune
 	BB->BB5 = (BB->BB5 & 0xffffffc0) | 0xb;
 	BB->BB7 = (BB->BB7 & 0xfffffc00) | 0x9c;
 #endif
@@ -546,9 +583,11 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	BB->CRCPOLY2 = (BB->CRCPOLY2 & 0xff000000) | 0x80032d;
 #endif
 
-	LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // Unknown why this needs to happen.
-	LL->FRAME_BUF = (uint32_t)frame_info;
+	//LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // 1: AUTO mode, to swap between RX <-> TX when either happened. 0: BASIC
+	//LL->FRAME_BUF = (uint32_t)frame_info; // also this only in AUTO mode
 
+#if CH570_CH572
 	LL->LL0 = 1; // Not sure what this does, but on TX it's 2
+#endif
 	rx_ready = 0;
 }
