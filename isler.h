@@ -12,6 +12,9 @@
 #define LL ((LL_Type *) LL_BASE)
 #define RF ((RF_Type *) RF_BASE)
 
+#define CH570_CH572 (defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2))
+#define CH582_CH583 (defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3))
+
 typedef struct{
 	// bits 0..5 = Channel
 	// bit 6 = disable whitening.
@@ -26,7 +29,7 @@ typedef struct{
 	volatile uint32_t CTRL_CFG;
 
 	volatile uint32_t CRCINIT1;
-#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+#if CH570_CH572
 	volatile uint32_t CRCPOLY1;
 	volatile uint32_t ACCESSADDRESS1;
 #else
@@ -40,14 +43,14 @@ typedef struct{
 	volatile uint32_t BB8;
 	volatile uint32_t BB9;
 	volatile uint32_t BB10;
-#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+#if CH582_CH583
 	volatile uint32_t CTRL_TX;
 #else
 	volatile uint32_t BB11;
 #endif
 	volatile uint32_t BB12;
 
-#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+#if CH570_CH572
 	// default, pre TX is a4000009
 	// bit 0: Set normally, but cleared in software when TXing (maybe a ready bit?)
 	// bit 1: Unset normally, but cleared anyway by software when TXing (maybe a fault bit?)
@@ -118,7 +121,7 @@ typedef struct{
 	volatile uint32_t TMR;
 	volatile uint32_t LL26;
 	volatile uint32_t LL27;
-#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+#if CH570_CH572
 	volatile uint32_t LL28;
 	volatile uint32_t LL29;
 #endif
@@ -198,7 +201,7 @@ void DevInit(uint8_t TxPower) {
 	LL->LL17 = 0x8c;
 	LL->LL19 = 0x76;
 	LL->STATE_BUF = (uint32_t)LLE_BUF;
-#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+#if CH582_CH583
 	LL->LL11 = 0x3c;
 	LL->LL15 = 0x3c;
 	LL->INT_EN = 0xf00f;
@@ -212,7 +215,7 @@ void DevInit(uint8_t TxPower) {
 	LL->STATUS = 0xffffffff;
 
 	RF->RF10 = 0x480;
-#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+#if CH582_CH583
 	RF->RF18 = (RF->RF18 & 0x8fffffff) | 0x20000000;
 	RF->RF18 = (RF->RF18 & 0xf8ffffff) | 0x4000000;
 	RF->RF18 = (RF->RF18 & 0xfffffff0) | 9;
@@ -269,7 +272,7 @@ void DevInit(uint8_t TxPower) {
 }
 
 void DevSetMode(uint16_t mode) {
-#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+#if CH582_CH583
 	if(mode) {
 		BB->CTRL_CFG &= 0xffffcfff;
 		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffe7f) | 0x100;
@@ -419,7 +422,7 @@ void RFEND_RXTune() {
 }
 
 void RegInit() {
-#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+#if CH582_CH583
 	DevSetMode(0xdd);
 	RFEND_TXTune();
 	RFEND_RXTune();
@@ -457,7 +460,7 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address
 	BB->CRCINIT1 = 0x555555; // crc init
-#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+#if CH570_CH572
 	BB->ACCESSADDRESS2 = 0x8E89BED6;
 	BB->CRCINIT2 = 0x555555;
 	BB->CRCPOLY1 = (BB->CRCPOLY1 & 0xff000000) | 0x80032d; // crc poly
@@ -499,7 +502,7 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 
 void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	if(LL->LL0 & 3) {
-#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+#if CH582_CH583
 		LL->CTRL_MOD &= 0xfffffff8;
 #else
 		LL->CTRL_MOD &= 0xfffff8ff;
@@ -510,7 +513,7 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 
 	DevSetChannel(channel);
 
-#if defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3) // ch582/3
+#if CH582_CH583
 	BB->CTRL_CFG = (BB->CTRL_CFG & 0xffffcfff) | 0x1000; // 1M, the following values depend on this (from BLE_SetPHYRxMode)
 	BB->BB4 = 0x3722d0;
 	BB->BB5 = 0x8101901;
@@ -536,7 +539,7 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address
 	BB->CRCINIT1 = 0x555555; // crc init
-#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2) // ch570/2
+#if CH570_CH572
 	BB->ACCESSADDRESS2 = 0x8E89BED6;
 	BB->CRCINIT2 = 0x555555;
 	BB->CRCPOLY1 = (BB->CRCPOLY1 & 0xff000000) | 0x80032d; // crc poly
