@@ -12,8 +12,41 @@
 #define LL ((LL_Type *) LL_BASE)
 #define RF ((RF_Type *) RF_BASE)
 
-#define CH570_CH572 (defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2))
-#define CH582_CH583 (defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3))
+#if defined(CH57x) && (MCU_PACKAGE == 0 || MCU_PACKAGE == 2)
+#define CH570_CH572
+#define CRCPOLY1          BB2
+#define ACCESSADDRESS1    BB3
+#define CTRL_TX           BB13
+#define CRCINIT2          BB22
+#define CRCPOLY2          BB23
+#define ACCESSADDRESS2    BB24
+#define FRAME_BUF         LL30
+#define STATE_BUF         LL31
+#define CTRL_MOD_RFSTOP   0xfffff8ff
+#define DEVSETMODE_ON     ((BB->CTRL_CFG & 0xfffcffff) | 0x20000)
+#define DEVSETMODE_OFF    ((BB->CTRL_CFG & 0xfffcffff) | 0x10000)
+#define DEVSETMODE_TUNE   0x0558
+#define DEVSETMODE_TX     0x0258
+#define DEVSETMODE_RX     0x0158
+#define CTRL_CFG_PHY_1M   ((BB->CTRL_CFG & 0xfffffcff) | 0x100)
+#define LL_STATUS_TX      0x20000
+#define CTRL_CFG_START_TX 0x1000000
+#elif defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3)
+#define CH582_CH583
+#define ACCESSADDRESS1    BB2
+#define CTRL_TX           BB11
+#define FRAME_BUF         LL28
+#define STATE_BUF         LL29
+#define CTRL_MOD_RFSTOP   0xfffffff8
+#define DEVSETMODE_ON     ((BB->CTRL_CFG & 0xfffffe7f) | 0x100)
+#define DEVSETMODE_OFF    ((BB->CTRL_CFG & 0xfffffe7f) | 0x80)
+#define DEVSETMODE_TUNE   0x00dd
+#define DEVSETMODE_TX     0x00da
+#define DEVSETMODE_RX     0x00d9
+#define CTRL_CFG_PHY_1M   ((BB->CTRL_CFG & 0xffff0fff) | 0x1000)
+#define LL_STATUS_TX      0x2000
+#define CTRL_CFG_START_TX 0x800000
+#endif
 
 typedef struct{
 	// bits 0..5 = Channel
@@ -29,13 +62,8 @@ typedef struct{
 	volatile uint32_t CTRL_CFG;
 
 	volatile uint32_t CRCINIT1;
-#if CH570_CH572
-	volatile uint32_t CRCPOLY1;
-	volatile uint32_t ACCESSADDRESS1;
-#else
-	volatile uint32_t ACCESSADDRESS1;
-	volatile uint32_t BB3;
-#endif
+	volatile uint32_t BB2; // ch570/2: CRCPOLY1, ch582/3: ACCESSADDRESS1
+	volatile uint32_t BB3; // ch570/2 ACCESSADDRESS1
 	volatile uint32_t BB4;
 	volatile uint32_t BB5;
 	volatile uint32_t BB6;
@@ -43,14 +71,9 @@ typedef struct{
 	volatile uint32_t BB8;
 	volatile uint32_t BB9;
 	volatile uint32_t BB10;
-#if CH582_CH583
-	volatile uint32_t CTRL_TX;
-#else
-	volatile uint32_t BB11;
-#endif
+	volatile uint32_t BB11; // ch582/3: CTRL_TX
 	volatile uint32_t BB12;
 
-#if CH570_CH572
 	// default, pre TX is a4000009
 	// bit 0: Set normally, but cleared in software when TXing (maybe a ready bit?)
 	// bit 1: Unset normally, but cleared anyway by software when TXing (maybe a fault bit?)
@@ -60,10 +83,7 @@ typedef struct{
 	// bit 9: Normally 0, but, if set, no clear effect.
 	// bits 24-30: TX Power.  Normally 0xA4
 	// Oddly, bit 31 seems to maybe be always set.
-	volatile uint32_t CTRL_TX;
-#else
-	volatile uint32_t BB13;
-#endif
+	volatile uint32_t BB13; // ch570/2: CTRL_TX
 	volatile uint32_t BB14;
 	volatile uint32_t BB15;
 	volatile uint32_t BB16;
@@ -72,9 +92,9 @@ typedef struct{
 	volatile uint32_t BB19;
 	volatile uint32_t BB20;
 	volatile uint32_t BB21;
-	volatile uint32_t CRCINIT2;
-	volatile uint32_t CRCPOLY2;
-	volatile uint32_t ACCESSADDRESS2;
+	volatile uint32_t BB22; // ch570/2: CRCINIT2
+	volatile uint32_t BB23; // ch570/2: CRCPOLY2
+	volatile uint32_t BB24; // ch570/2: ACCESSADDRESS2
 } BB_Type;
 
 typedef struct{
@@ -121,12 +141,10 @@ typedef struct{
 	volatile uint32_t TMR;
 	volatile uint32_t LL26;
 	volatile uint32_t LL27;
-#if CH570_CH572
 	volatile uint32_t LL28;
 	volatile uint32_t LL29;
-#endif
-	volatile uint32_t FRAME_BUF;
-	volatile uint32_t STATE_BUF;
+	volatile uint32_t LL30;
+	volatile uint32_t LL31;
 } LL_Type;
 
 typedef struct{
@@ -185,8 +203,7 @@ volatile uint32_t rx_ready;
 
 __attribute__((interrupt))
 void LLE_IRQHandler() {
-	printf("LL\n");
-#if CH582_CH583
+#ifdef CH582_CH583
 	if((LL->STATUS & (1<<14)) && (LL->INT_EN & (1<<14))) {
 		LL->LL26 = 0xffffffff;
 		LL->STATUS = 0x4000;
@@ -198,11 +215,7 @@ void LLE_IRQHandler() {
 		BB->CTRL_TX = (BB->CTRL_TX & 0xfffffffc) | 1;
 	}
 	DevSetMode(0);
-#if CH582_CH583
-	LL->CTRL_MOD &= 0xfffffff8;
-#else
-	LL->CTRL_MOD &= 0xfffff8ff;
-#endif
+	LL->CTRL_MOD &= CTRL_MOD_RFSTOP;
 	LL->LL0 |= 0x08;
 	rx_ready = 1;
 }
@@ -215,7 +228,7 @@ void DevInit(uint8_t TxPower) {
 	LL->LL17 = 0x8c;
 	LL->LL19 = 0x76;
 	LL->STATE_BUF = (uint32_t)LLE_BUF;
-#if CH582_CH583
+#ifdef CH582_CH583
 	LL->LL11 = 0x3c;
 	LL->LL15 = 0x3c;
 	LL->INT_EN = 0xf00f;
@@ -229,7 +242,7 @@ void DevInit(uint8_t TxPower) {
 	LL->STATUS = 0xffffffff;
 
 	RF->RF10 = 0x480;
-#if CH582_CH583
+#ifdef CH582_CH583
 	RF->RF18 = (RF->RF18 & 0x8fffffff) | 0x20000000;
 	RF->RF18 = (RF->RF18 & 0xf8ffffff) | 0x4000000;
 	RF->RF18 = (RF->RF18 & 0xfffffff0) | 9;
@@ -286,29 +299,20 @@ void DevInit(uint8_t TxPower) {
 }
 
 void DevSetMode(uint16_t mode) {
-#if CH582_CH583
 	if(mode) {
-		BB->CTRL_CFG &= 0xffffcfff;
-		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffe7f) | 0x100;
+		BB->CTRL_CFG = DEVSETMODE_ON;
 		RF->RF2 |= 0x330000;
-		LL->CTRL_MOD = mode;
 	}
 	else {
-		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffe7f) | 0x80;
+		BB->CTRL_CFG = DEVSETMODE_OFF;
 		RF->RF2 &= 0xffcdffff;
-		LL->CTRL_MOD = 0x80;
 	}
+#ifdef CH582_CH583
+	mode = (mode == 0) ? 0x80 : mode;
 #else
-	if(mode) {
-		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffcffff) | 0x20000;
-		RF->RF2 |= 0x330000;
-	}
-	else {
-		BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffcffff) | 0x10000;
-		RF->RF2 &= 0xffcdffff;
-	}
-	LL->CTRL_MOD = (0x30000 | mode);
+	mode |= 0x30000;
 #endif
+	LL->CTRL_MOD = mode;
 }
 
 uint32_t RFEND_TXCTune(uint8_t channel) {
@@ -437,11 +441,7 @@ void RFEND_RXTune() {
 }
 
 void RegInit() {
-#if CH582_CH583
-	DevSetMode(0x00dd);
-#else
-	DevSetMode(0x0558);
-#endif
+	DevSetMode(DEVSETMODE_TUNE);
 	RFEND_TXTune();
 	RFEND_RXTune();
 	DevSetMode(0);
@@ -461,24 +461,18 @@ void DevSetChannel(uint8_t channel) {
 
 void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	__attribute__((aligned(4))) uint8_t  ADV_BUF[len+2]; // for the advertisement, which is 37 bytes + 2 header bytes
-#if CH582_CH583
-	DevSetMode(0);
-#endif
+
 	BB->CTRL_TX = (BB->CTRL_TX & 0xfffffffc) | 1;
 
 	DevSetChannel(channel);
 
 	// Uncomment to disable whitening to debug RF.
 	//BB->CTRL_CFG |= (1<<6);
-#if CH582_CH583
-	DevSetMode(0x00da);
-#else
-	DevSetMode(0x0258);
-#endif
+	DevSetMode(DEVSETMODE_TX);
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address
 	BB->CRCINIT1 = 0x555555; // crc init
-#if CH570_CH572
+#ifdef CH570_CH572
 	BB->ACCESSADDRESS2 = 0x8E89BED6;
 	BB->CRCINIT2 = 0x555555;
 	BB->CRCPOLY1 = (BB->CRCPOLY1 & 0xff000000) | 0x80032d; // crc poly
@@ -495,11 +489,7 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	for( int timeout = 3000; !(RF->RF26 & 0x1000000) && timeout >= 0; timeout-- );
 
 	//PHYSetTxMode(len);
-#if CH582_CH583
-	BB->CTRL_CFG = (BB->CTRL_CFG & 0xffff0fff) | 0x1000;
-#else
-	BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffcff) | 0x100;
-#endif
+	BB->CTRL_CFG = CTRL_CFG_PHY_1M;
 
 	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
 	// Note: There's probably something else that must be set if in 2MHz mode.
@@ -508,18 +498,10 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	// This clears bit 17 (If set, seems to have no impact.)
 	LL->LL4 &= 0xfffdffff;
 
-#if CH582_CH583
-	LL->STATUS = 0x2000;
-#else
-	LL->STATUS = 0x20000;
-#endif
+	LL->STATUS = LL_STATUS_TX;
 	LL->TMR = (uint32_t)(((len *8) + 0xee) *2);
 
-#if CH582_CH583
-	BB->CTRL_CFG |= 0x800000;
-#else
-	BB->CTRL_CFG |= 0x1000000;
-#endif
+	BB->CTRL_CFG |= CTRL_CFG_START_TX;
 	BB->CTRL_TX &= 0xfffffffc;
 
 	LL->LL0 = 2; // Not sure what this does, but on RX it's 1
@@ -527,11 +509,7 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	while(LL->TMR); // wait for tx buffer to empty
 	DevSetMode(0);
 	if(LL->LL0 & 3) {
-#if CH582_CH583
-		LL->CTRL_MOD &= 0xfffffff8;
-#else
-		LL->CTRL_MOD &= 0xfffff8ff;
-#endif
+		LL->CTRL_MOD &= CTRL_MOD_RFSTOP;
 		LL->LL0 |= 0x08;
 	}
 }
@@ -539,32 +517,23 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	DevSetMode(0);
 	if(LL->LL0 & 3) {
-#if CH582_CH583
-		LL->CTRL_MOD &= 0xfffffff8;
-#else
-		LL->CTRL_MOD &= 0xfffff8ff;
-#endif
+		LL->CTRL_MOD &= CTRL_MOD_RFSTOP;
 		LL->LL0 |= 0x08;
 	}
 	LL->TMR = 0;
 
 	DevSetChannel(channel);
 
-#if CH582_CH583
-	BB->CTRL_CFG = (BB->CTRL_CFG & 0xffffcfff) | 0x1000; // 1M, the following values depend on this (from BLE_SetPHYRxMode)
+	DevSetMode(DEVSETMODE_RX);
+	BB->CTRL_CFG = CTRL_CFG_PHY_1M; // 1M, the following values depend on this (from BLE_SetPHYRxMode)
+#ifdef CH582_CH583
 	BB->BB4 = 0x3722d0;
 	BB->BB5 = 0x8101901;
 	BB->BB6 = 0x31624;
 	BB->BB8 = 0x90083;
 	BB->BB9 = 0x1006310;
 	BB->BB10 = 0x28be;
-
-	DevSetMode(0x00d9);
 #else
-	DevSetMode(0x0158);
-
-	BB->CTRL_CFG = (BB->CTRL_CFG & 0xfffffcff) | 0x100;
-
 	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
 	// Note: There's probably something else that must be set if in 2MHz mode.
 	BB->BB9 = (BB->BB9 & 0xf9ffffff) | 0x2000000;
@@ -576,7 +545,7 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address
 	BB->CRCINIT1 = 0x555555; // crc init
-#if CH570_CH572
+#ifdef CH570_CH572
 	BB->ACCESSADDRESS2 = 0x8E89BED6;
 	BB->CRCINIT2 = 0x555555;
 	BB->CRCPOLY1 = (BB->CRCPOLY1 & 0xff000000) | 0x80032d; // crc poly
@@ -586,8 +555,6 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	//LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // 1: AUTO mode, to swap between RX <-> TX when either happened. 0: BASIC
 	//LL->FRAME_BUF = (uint32_t)frame_info; // also this only in AUTO mode
 
-#if CH570_CH572
 	LL->LL0 = 1; // Not sure what this does, but on TX it's 2
-#endif
 	rx_ready = 0;
 }
