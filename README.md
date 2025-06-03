@@ -7,5 +7,16 @@ If you have your copy of `ch32fun` somewhere else you probably already know what
 in the `Makefile` to point to that.
 
 ### supported MCUs:
-This code aims to support all WCH RF enabled microcontrollers, and is currently tested and working on ch570,
-and development aims for support for ch573, ch582, ch592/1 and ch32v208 (but this can be extended to other chips).
+This code aims to support all WCH RF enabled microcontrollers, and is currently tested and working on ch570 and ch582,
+and development aims for additional support for ch573, ch592/1 and ch32v208 (but this can be extended to other chips).
+Current focus is on getting the 1M mode working on all, and when that is finished 2M and Coded Phy S2 and S8 will be added
+where supported.
+
+| Chip       | RX | TX | 1M | 2M | S2 | S8 |
+|------------|----|----|----|----|----|----|
+| ch570/2    | √  | √  | √  | x  | x  | x  |
+| ch571/3    | x  | x  | x  | x  | x  | x  |
+| ch582/3    | √  | √  | √  | x  | x  | x  |
+| ch584/5    | x  | x  | x  | x  | x  | x  |
+| ch591/2    | x  | x  | x  | x  | x  | x  |
+| ch23v203/2 | x  | x  | x  | x  | x  | x  |
