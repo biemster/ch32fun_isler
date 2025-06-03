@@ -46,6 +46,21 @@
 #define CTRL_CFG_PHY_1M   ((BB->CTRL_CFG & 0xffff0fff) | 0x1000)
 #define LL_STATUS_TX      0x2000
 #define CTRL_CFG_START_TX 0x800000
+#elif defined(CH59x) && (MCU_PACKAGE == 1 || MCU_PACKAGE == 2)
+#define CH591_CH592
+#define ACCESSADDRESS1    BB2
+#define CTRL_TX           BB11
+#define FRAME_BUF         LL30
+#define STATE_BUF         LL31
+#define CTRL_MOD_RFSTOP   0xfffff8ff
+#define DEVSETMODE_ON     ((BB->CTRL_CFG & 0xfffffcff) | 0x280)
+#define DEVSETMODE_OFF    ((BB->CTRL_CFG & 0xfffffcff) | 0x100)
+#define DEVSETMODE_TUNE   0x0558
+#define DEVSETMODE_TX     0x0258
+#define DEVSETMODE_RX     0x0158
+#define CTRL_CFG_PHY_1M   (BB->CTRL_CFG & 0xffffff7f)
+#define LL_STATUS_TX      0x20000
+#define CTRL_CFG_START_TX 0x800000
 #endif
 
 typedef struct{
@@ -62,7 +77,7 @@ typedef struct{
 	volatile uint32_t CTRL_CFG;
 
 	volatile uint32_t CRCINIT1;
-	volatile uint32_t BB2; // ch570/2: CRCPOLY1, ch582/3: ACCESSADDRESS1
+	volatile uint32_t BB2; // ch570/2: CRCPOLY1, [ch582/3 ch591/2]: ACCESSADDRESS1
 	volatile uint32_t BB3; // ch570/2 ACCESSADDRESS1
 	volatile uint32_t BB4;
 	volatile uint32_t BB5;
@@ -71,7 +86,7 @@ typedef struct{
 	volatile uint32_t BB8;
 	volatile uint32_t BB9;
 	volatile uint32_t BB10;
-	volatile uint32_t BB11; // ch582/3: CTRL_TX
+	volatile uint32_t BB11; // ch582/3, ch591/2: CTRL_TX
 	volatile uint32_t BB12;
 
 	// default, pre TX is a4000009
@@ -141,10 +156,10 @@ typedef struct{
 	volatile uint32_t TMR;
 	volatile uint32_t LL26;
 	volatile uint32_t LL27;
-	volatile uint32_t LL28;
-	volatile uint32_t LL29;
-	volatile uint32_t LL30;
-	volatile uint32_t LL31;
+	volatile uint32_t LL28; // ch582/3: FRAME_BUF
+	volatile uint32_t LL29; // ch582/3: STATE_BUF
+	volatile uint32_t LL30; // ch570/2, ch591/2: FRAME_BUF
+	volatile uint32_t LL31; // ch570/2, ch591/2: STATE_BUF
 } LL_Type;
 
 typedef struct{
@@ -232,6 +247,12 @@ void DevInit(uint8_t TxPower) {
 	LL->LL11 = 0x3c;
 	LL->LL15 = 0x3c;
 	LL->INT_EN = 0xf00f;
+#elif defined(CH5912_CH592)
+	LL->LL6 = 0x78;
+	LL->LL8 = 0xffffffff;
+	LL->LL11 = 0x6e;
+	LL->LL21 = 0x14;
+	LL->INT_EN = 0x1f000f;
 #else
 	LL->LL11 = 0x6c;
 	LL->LL15 = 0x6c;
@@ -280,6 +301,33 @@ void DevInit(uint8_t TxPower) {
 	BB->BB8 = 0x90083;
 
 	NVIC->VTFADDR[3] = 0x200011cb;
+#elif defined(CH591_CH592)
+	RF->RF12 = (RF->RF12 & 0x8fffffff) | 0x10077700;
+	RF->RF15 = (RF->RF15 & 0x18ff0fff) | 0x42005000;
+	RF->RF19 &= 0xfffffff8;
+	RF->RF21 = (RF->RF21 & 0xfffffff0) | 9;
+	RF->RF23 &= 0xff88ffff;
+
+	BB->CTRL_CFG |= 0x800000;
+	BB->BB13 = 0x50;
+	BB->CTRL_TX = (BB->CTRL_TX & 0x81ffffff) | (TxPower & 0x3f) << 0x19;
+	uint32_t uVar3 = 0x1000000;
+	uint32_t uVar4 = RF->RF23 & 0xf8ffffff;
+	if(TxPower < 29) {
+		/* uVar3 and uVar4 are initialized properly already */
+	}
+	else if(TxPower < 35) {
+		uVar3 = 0x3000000;
+	}
+	else if(TxPower < 59) {
+		uVar3 = 0x5000000;
+	}
+	else {
+		uVar4 = RF->RF23;
+		uVar3 = 0x7000000;
+	}
+	RF->RF23 = uVar4 | uVar3;
+	BB->BB4 = (BB->BB4 & 0xffffffc0) | 0xe;
 #else
 	RF->RF12 &= 0xfff9ffff;
 	RF->RF12 |= 0x70000000;
@@ -478,7 +526,7 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	BB->CRCPOLY1 = (BB->CRCPOLY1 & 0xff000000) | 0x80032d; // crc poly
 	BB->CRCPOLY2 = (BB->CRCPOLY2 & 0xff000000) | 0x80032d;
 #endif
-	LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // The "| 1" is for AUTO mode, to swap between RX <-> TX when either happened
+	// LL->LL1 = (LL->LL1 & 0xfffffffe) | 1; // The "| 1" is for AUTO mode, to swap between RX <-> TX when either happened
 
 	ADV_BUF[0] = 0x02; // PDU 0x00, 0x02, 0x06 seem to work, with only 0x02 showing up on the phone
 	ADV_BUF[1] = len ;
