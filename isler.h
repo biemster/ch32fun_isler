@@ -581,6 +581,9 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	BB->BB8 = 0x90083;
 	BB->BB9 = 0x1006310;
 	BB->BB10 = 0x28be;
+#elif defined(CH591_CH592)
+	BB->BB6 = (BB->BB6 & 0xfffffc00) | 0x132; // for 1M, 2M: 0x13a
+	BB->BB19 = 0x7f;
 #else
 	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
 	// Note: There's probably something else that must be set if in 2MHz mode.
