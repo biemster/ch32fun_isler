@@ -31,6 +31,9 @@
 #define CTRL_CFG_PHY_1M   ((BB->CTRL_CFG & 0xfffffcff) | 0x100)
 #define LL_STATUS_TX      0x20000
 #define CTRL_CFG_START_TX 0x1000000
+#elif defined(CH57x) && (MCU_PACKAGE == 1 || MCU_PACKAGE == 3)
+#define CH571_CH573
+#error "not implemented yet"
 #elif defined(CH58x) && (MCU_PACKAGE == 2 || MCU_PACKAGE == 3)
 #define CH582_CH583
 #define ACCESSADDRESS1    BB2
@@ -61,6 +64,8 @@
 #define CTRL_CFG_PHY_1M   (BB->CTRL_CFG & 0xffffff7f)
 #define LL_STATUS_TX      0x20000
 #define CTRL_CFG_START_TX 0x800000
+#else
+#error "MCU_TARGET selected in Makefile is not supported"
 #endif
 
 typedef struct{
@@ -243,27 +248,43 @@ void DevInit(uint8_t TxPower) {
 	LL->LL17 = 0x8c;
 	LL->LL19 = 0x76;
 	LL->STATE_BUF = (uint32_t)LLE_BUF;
-#ifdef CH582_CH583
-	LL->LL11 = 0x3c;
-	LL->LL15 = 0x3c;
-	LL->INT_EN = 0xf00f;
-#elif defined(CH5912_CH592)
-	LL->LL6 = 0x78;
-	LL->LL8 = 0xffffffff;
-	LL->LL11 = 0x6e;
-	LL->LL21 = 0x14;
-	LL->INT_EN = 0x1f000f;
-#else
+
+#ifdef CH570_CH572
 	LL->LL11 = 0x6c;
 	LL->LL15 = 0x6c;
 	LL->LL1 = 0x78;
 	LL->LL21 = 0;
 	LL->INT_EN = 0x16000f;
+#elif defined(CH582_CH583)
+	LL->LL11 = 0x3c;
+	LL->LL15 = 0x3c;
+	LL->INT_EN = 0xf00f;
+#elif defined(CH591_CH592)
+	LL->LL6 = 0x78;
+	LL->LL8 = 0xffffffff;
+	LL->LL11 = 0x6e;
+	LL->LL21 = 0x14;
+	LL->INT_EN = 0x1f000f;
 #endif
-	LL->STATUS = 0xffffffff;
 
+	LL->STATUS = 0xffffffff;
 	RF->RF10 = 0x480;
-#ifdef CH582_CH583
+
+#ifdef CH570_CH572
+	RF->RF12 &= 0xfff9ffff;
+	RF->RF12 |= 0x70000000;
+	RF->RF15 = (RF->RF15 & 0xf8ffffff) | 0x2000000;
+	RF->RF15 = (RF->RF15 & 0x1fffffff) | 0x40000000;
+	RF->RF18 &= 0xfff8ffff;
+	RF->RF20 = (RF->RF20 & 0xfffff8ff) | 0x300;
+	RF->RF23 |= 0x70000;
+	RF->RF23 |= 0x700000;
+
+	BB->BB14 = 0x2020c;
+	BB->BB15 = 0x50;
+	BB->CTRL_TX = (BB->CTRL_TX & 0x1ffffff) | (TxPower | 0x40) << 0x19;
+	BB->CTRL_CFG &= 0xfffffcff;
+#elif defined(CH582_CH583)
 	RF->RF18 = (RF->RF18 & 0x8fffffff) | 0x20000000;
 	RF->RF18 = (RF->RF18 & 0xf8ffffff) | 0x4000000;
 	RF->RF18 = (RF->RF18 & 0xfffffff0) | 9;
@@ -328,21 +349,8 @@ void DevInit(uint8_t TxPower) {
 	}
 	RF->RF23 = uVar4 | uVar3;
 	BB->BB4 = (BB->BB4 & 0xffffffc0) | 0xe;
-#else
-	RF->RF12 &= 0xfff9ffff;
-	RF->RF12 |= 0x70000000;
-	RF->RF15 = (RF->RF15 & 0xf8ffffff) | 0x2000000;
-	RF->RF15 = (RF->RF15 & 0x1fffffff) | 0x40000000;
-	RF->RF18 &= 0xfff8ffff;
-	RF->RF20 = (RF->RF20 & 0xfffff8ff) | 0x300;
-	RF->RF23 |= 0x70000;
-	RF->RF23 |= 0x700000;
-
-	BB->BB14 = 0x2020c;
-	BB->BB15 = 0x50;
-	BB->CTRL_TX = (BB->CTRL_TX & 0x1ffffff) | (TxPower | 0x40) << 0x19;
-	BB->CTRL_CFG &= 0xfffffcff;
 #endif
+
 	NVIC->VTFIDR[3] = 0x14;
 }
 
@@ -571,10 +579,18 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	LL->TMR = 0;
 
 	DevSetChannel(channel);
-
 	DevSetMode(DEVSETMODE_RX);
 	BB->CTRL_CFG = CTRL_CFG_PHY_1M; // 1M, the following values depend on this (from BLE_SetPHYRxMode)
-#ifdef CH582_CH583
+
+#ifdef CH570_CH572
+	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
+	// Note: There's probably something else that must be set if in 2MHz mode.
+	BB->BB9 = (BB->BB9 & 0xf9ffffff) | 0x2000000;
+
+	RF->RF20 = (RF->RF20 & 0xffffffe0) | (tuneFilter & 0x1f); // Already done in RXTune
+	BB->BB5 = (BB->BB5 & 0xffffffc0) | 0xb;
+	BB->BB7 = (BB->BB7 & 0xfffffc00) | 0x9c;
+#elif defined(CH582_CH583)
 	BB->BB4 = 0x3722d0;
 	BB->BB5 = 0x8101901;
 	BB->BB6 = 0x31624;
@@ -584,14 +600,6 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 #elif defined(CH591_CH592)
 	BB->BB6 = (BB->BB6 & 0xfffffc00) | 0x132; // for 1M, 2M: 0x13a
 	BB->BB19 = 0x7f;
-#else
-	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
-	// Note: There's probably something else that must be set if in 2MHz mode.
-	BB->BB9 = (BB->BB9 & 0xf9ffffff) | 0x2000000;
-
-	RF->RF20 = (RF->RF20 & 0xffffffe0) | (tuneFilter & 0x1f); // Already done in RXTune
-	BB->BB5 = (BB->BB5 & 0xffffffc0) | 0xb;
-	BB->BB7 = (BB->BB7 & 0xfffffc00) | 0x9c;
 #endif
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address
