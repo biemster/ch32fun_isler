@@ -19,7 +19,7 @@ where supported.
 | ch582/3    | √  | √  | √  | x  | x  | x  |
 | ch584/5    | x  | x  | x  | x  | x  | x  |
 | ch591/2    | √  | √  | √  | x  | x  | x  |
-| ch23v208   | x  | x  | x  | x  | x  | x  |
+| ch23v208   | √  | √  | √  | x  | x  | x  |
 
 * ch571/3 is a completely different creature in many respects, and iSLER support is very challenging. Current state is that
 the core init seems ok, but TX does not work and RX seems to receive but since DMA has to be handled manually here
