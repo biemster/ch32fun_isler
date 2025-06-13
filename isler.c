@@ -57,7 +57,7 @@ int main()
 	uint8_t frame_info[] = {0xff, 0x10}; // PDU, len
 
 	blink(5);
-	printf(".~ ch32fun ISLER ~.\n");
+	printf(".~ ch32fun iSLER ~.\n");
 
 	for(int c = 0; c < sizeof(adv_channels); c++) {
 		Frame_TX(adv, sizeof(adv), adv_channels[c]);

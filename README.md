@@ -1,5 +1,5 @@
 # ch32fun_isler
-Industry Standard Low Energy Radio (ISLER) RX/TX for ch32fun
+Industry Standard Low Energy Radio (iSLER) RX/TX for ch32fun
 
 ### install:
 Checkout [ch32fun](https://github.com/cnlohr/ch32fun) on the same level as this repository, and just run `make`.
@@ -15,8 +15,13 @@ where supported.
 | Chip       | RX | TX | 1M | 2M | S2 | S8 |
 |------------|----|----|----|----|----|----|
 | ch570/2    | √  | √  | √  | x  | x  | x  |
-| ch571/3    | x  | x  | x  | x  | x  | x  |
+| ch571/3*   | ~  | x  | ~  | x  | x  | x  |
 | ch582/3    | √  | √  | √  | x  | x  | x  |
 | ch584/5    | x  | x  | x  | x  | x  | x  |
 | ch591/2    | √  | √  | √  | x  | x  | x  |
-| ch23v203/8 | x  | x  | x  | x  | x  | x  |
+| ch23v208   | x  | x  | x  | x  | x  | x  |
+
+* ch571/3 is a completely different creature in many respects, and iSLER support is very challenging. Current state is that
+the core init seems ok, but TX does not work and RX seems to receive but since DMA has to be handled manually here
+I don't know where to pull the frame data from. It's possible the TX issues are also from the DMA part, but the LLE_IRQHandler
+is also sus.
