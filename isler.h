@@ -95,9 +95,9 @@
 #endif
 
 #ifdef CH32V208
-#define BB_BASE  (0x40024100)
-#define LL_BASE  (0x40024200)
-#define RF_BASE  (0x40025000)
+#define BB_BASE  (0x40024100) // Baseband, digital part of the PHY
+#define LL_BASE  (0x40024200) // Link Layer, MAC
+#define RF_BASE  (0x40025000) // Radio frontend, analog part of the PHY
 #else
 #define DMA_BASE (0x4000c000)
 #define BB_BASE  (0x4000c100)
