@@ -28,7 +28,8 @@ is also sus.
 
 ### Links for low-cost dev boards:
 CH570/2: \
-https://vi.aliexpress.com/item/1005009123215735.html
+https://vi.aliexpress.com/item/1005009123215735.html \
+https://vi.aliexpress.com/item/1005009071651737.html
 
 CH571/3, CH582/3: \
 https://vi.aliexpress.com/item/1005008586545355.html \
