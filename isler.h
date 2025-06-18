@@ -21,6 +21,7 @@
 #define DEVSETMODE_TX      0x0258
 #define DEVSETMODE_RX      0x0158
 #define CTRL_CFG_PHY_1M    ((BB->CTRL_CFG & 0xfffffcff) | 0x100)
+#define CTRL_CFG_PHY_2M    (BB->CTRL_CFG & 0xfffffcff)
 #define LL_STATUS_TX       0x20000
 #define CTRL_CFG_START_TX  0x1000000
 #elif defined(CH57x) && (MCU_PACKAGE == 1 || MCU_PACKAGE == 3)
@@ -53,7 +54,10 @@
 #define DEVSETMODE_TUNE    0x00dd
 #define DEVSETMODE_TX      0x00da
 #define DEVSETMODE_RX      0x00d9
-#define CTRL_CFG_PHY_1M   ((BB->CTRL_CFG & 0xffff0fff) | 0x1000)
+#define CTRL_CFG_PHY_1M    ((BB->CTRL_CFG & 0xffff0fff) | 0x1000)
+#define CTRL_CFG_PHY_2M    (BB->CTRL_CFG & 0xffff0fff)
+#define CTRL_CFG_PHY_S2    ((BB->CTRL_CFG & 0xffff0fff) | 0x4000)
+#define CTRL_CFG_PHY_S8    ((BB->CTRL_CFG & 0xffff0fff) | 0x2000)
 #define LL_STATUS_TX       0x2000
 #define CTRL_CFG_START_TX  0x800000
 #elif defined(CH59x) && (MCU_PACKAGE == 1 || MCU_PACKAGE == 2)
@@ -70,6 +74,7 @@
 #define DEVSETMODE_TX      0x0258
 #define DEVSETMODE_RX      0x0158
 #define CTRL_CFG_PHY_1M    (BB->CTRL_CFG & 0xffffff7f)
+#define CTRL_CFG_PHY_2M    (BB->CTRL_CFG | 0x80)
 #define LL_STATUS_TX       0x20000
 #define CTRL_CFG_START_TX  0x800000
 #elif defined(CH32V20x)
@@ -87,7 +92,10 @@
 #define DEVSETMODE_TUNE    0x5d
 #define DEVSETMODE_TX      0x5a
 #define DEVSETMODE_RX      0x59
-#define CTRL_CFG_PHY_1M   ((BB->CTRL_CFG & 0xffff0fff) | 0x1000)
+#define CTRL_CFG_PHY_1M    ((BB->CTRL_CFG & 0xffff0fff) | 0x1000)
+#define CTRL_CFG_PHY_2M    (BB->CTRL_CFG & 0xffff0fff)
+#define CTRL_CFG_PHY_S2    ((BB->CTRL_CFG & 0xffff0fff) | 0x4000)
+#define CTRL_CFG_PHY_S8    ((BB->CTRL_CFG & 0xffff0fff) | 0x2000)
 #define LL_STATUS_TX       0x2000
 #define CTRL_CFG_START_TX  0x800000
 #else
@@ -267,10 +275,15 @@ uint8_t channel_map[] = {1,2,3,4,5,6,7,8,9,10,12,13,14,15,16,17,18,19,20,21,22,2
 #define CO_MID (uint8_t)(RF->TXTUNE_CTRL & ~0xffffffc0)
 #define GA_MID (uint8_t)((RF->TXTUNE_CTRL & ~0x80ffffff) >> 24)
 
+#define PHY_1M    1
+#define PHY_2M    2
+#define PHY_CODED 3
+
 void DevSetMode(uint16_t mode);
 __attribute__((aligned(4))) uint32_t LLE_BUF[0x110];
 __attribute__((aligned(4))) uint32_t LLE_BUF2[0x110];
 volatile uint32_t tuneFilter;
+volatile uint32_t tuneFilter2M;
 volatile uint32_t rx_ready;
 
 #ifdef CH571_CH573
@@ -644,7 +657,7 @@ void RFEND_RXTune() {
 	RF->RF20 |= 0x10000;
 	RF->RF20 = (RF->RF20 & 0xffffffe0) | tuneFilter;
 	RF->RF2 &= 0xffdfffff;
-	// tuneFilter2M = max(tuneFilter +2, 0x1f)
+	tuneFilter2M = (tuneFilter +2 < 0x1f) ? (tuneFilter +2) : 0x1f;
 
 	// RXADC
 	RF->RF22 &= 0xfffeffff;
@@ -680,7 +693,7 @@ void DevSetChannel(uint8_t channel) {
 	BB->CTRL_CFG = (BB->CTRL_CFG & 0xffffff80) | (channel & 0x7f);
 }
 
-void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
+void Frame_TX(uint8_t adv[], size_t len, uint8_t channel, uint8_t phy_mode) {
 	__attribute__((aligned(4))) uint8_t  ADV_BUF[len+2]; // for the advertisement, which is 37 bytes + 2 header bytes
 
 	BB->CTRL_TX = (BB->CTRL_TX & 0xfffffffc) | 1;
@@ -709,18 +722,23 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	// Wait for tuning bit to clear.
 	for( int timeout = 3000; !(RF->RF26 & 0x1000000) && timeout >= 0; timeout-- );
 
-	//PHYSetTxMode(len);
-	BB->CTRL_CFG = CTRL_CFG_PHY_1M;
+	BB->CTRL_CFG = (phy_mode == PHY_2M) ? CTRL_CFG_PHY_2M:
+										  CTRL_CFG_PHY_1M; // default 1M for now
 
-	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
-	// Note: There's probably something else that must be set if in 2MHz mode.
-	BB->BB9 = (BB->BB9 & 0xf9ffffff) | 0x2000000; // from 570/2
-	BB->BB11 = (BB->BB11 & 0xfffffffc); // from 571/3, |2 for RX
+#if defined(CH570_CH572)
+	BB->BB9 = (BB->BB9 & 0xf9ffffff) | ((phy_mode == PHY_2M) ? 0 : 0x2000000);
+#endif
+
+#if defined(CH571_CH573)
+	BB->BB11 = (BB->BB11 & 0xfffffffc); // |2 for RX
+#endif
 
 	// This clears bit 17 (If set, seems to have no impact.)
 	LL->LL4 &= 0xfffdffff;
 
-	LL->STATUS = LL_STATUS_TX; // not used in ch571/3
+#if !defined(CH571_CH573)
+	LL->STATUS = LL_STATUS_TX;
+#endif
 	LL->TMR = (uint32_t)(((len *8) + 0xee) *2);
 
 	BB->CTRL_CFG |= CTRL_CFG_START_TX;
@@ -736,7 +754,7 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel) {
 	}
 }
 
-void Frame_RX(uint8_t frame_info[], uint8_t channel) {
+void Frame_RX(uint8_t frame_info[], uint8_t channel, uint8_t phy_mode) {
 	DevSetMode(0);
 	if(LL->LL0 & 3) {
 		LL->CTRL_MOD &= CTRL_MOD_RFSTOP;
@@ -746,16 +764,15 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 
 	DevSetChannel(channel);
 	DevSetMode(DEVSETMODE_RX);
-	BB->CTRL_CFG = CTRL_CFG_PHY_1M; // 1M, the following values depend on this (from BLE_SetPHYRxMode)
+
+	BB->CTRL_CFG = (phy_mode == PHY_2M) ? CTRL_CFG_PHY_2M:
+										  CTRL_CFG_PHY_1M; // default 1M for now
 
 #ifdef CH570_CH572
-	// Configure 1MHz mode.  Unset 0x2000000 to switch to 2MHz bandwidth mode.)
-	// Note: There's probably something else that must be set if in 2MHz mode.
-	BB->BB9 = (BB->BB9 & 0xf9ffffff) | 0x2000000;
-
-	RF->RF20 = (RF->RF20 & 0xffffffe0) | (tuneFilter & 0x1f); // Already done in RXTune
-	BB->BB5 = (BB->BB5 & 0xffffffc0) | 0xb;
-	BB->BB7 = (BB->BB7 & 0xfffffc00) | 0x9c;
+	BB->BB9 = (BB->BB9 & 0xf9ffffff) | ((phy_mode == PHY_2M) ? 0 : 0x2000000);
+	RF->RF20 = (RF->RF20 & 0xffffffe0) | ((phy_mode == PHY_2M) ? (tuneFilter2M & 0x1f) : (tuneFilter & 0x1f));
+	BB->BB5 = (BB->BB5 & 0xffffffc0) | ((phy_mode == PHY_2M) ? 0xd : 0xb);
+	BB->BB7 = (BB->BB7 & 0xff00fc00) | ((phy_mode == PHY_2M) ? 0x7f00a0 : 0x79009c);
 #elif defined(CH571_CH573)
 	BB->BB11 = (BB->BB11 & 0xfffffffc) | 2; // no |2 for TX
 #elif defined(CH582_CH583) || defined(CH32V208)
@@ -766,8 +783,8 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel) {
 	BB->BB9 = 0x1006310;
 	BB->BB10 = 0x28be;
 #elif defined(CH591_CH592)
-	BB->BB6 = (BB->BB6 & 0xfffffc00) | 0x132; // for 1M, 2M: 0x13a
-	BB->BB19 = 0x7f;
+	BB->BB6 = (BB->BB6 & 0xfffffc00) | ((phy_mode == PHY_2M) ? 0x13a : 0x132);
+	BB->BB4 = (BB->BB4 & 0x00ffffff) | ((phy_mode == PHY_2M) ? 0x78000000 : 0x7f000000);
 #endif
 
 	BB->ACCESSADDRESS1 = 0x8E89BED6; // access address

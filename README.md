@@ -9,17 +9,16 @@ in the `Makefile` to point to that.
 ### supported MCUs:
 This code aims to support all WCH RF enabled microcontrollers, and is currently tested and working on ch570, ch582, ch592 and ch32v208,
 and development aims for additional support for ch573 (which is a pain in the neck!) and ch585, and will be extended to future RF chips from WCH.
-Current focus is on getting 1M rx/tx working on all, and when that is finished 2M and Coded Phy S2 and S8 will be added
-where supported.
+The 1M and 2M PHY's work on all the supported chips, and Coded Phy S2 and S8 is in development.
 
 | Chip       | RX | TX | 1M | 2M | S2 | S8 |
 |------------|----|----|----|----|----|----|
-| ch570/2    | √  | √  | √  | x  | x  | x  |
+| ch570/2    | √  | √  | √  | √  | x  | x  |
 | ch571/3*   | ~  | x  | ~  | x  | x  | x  |
-| ch582/3    | √  | √  | √  | x  | x  | x  |
+| ch582/3    | √  | √  | √  | √  | x  | x  |
 | ch584/5    | x  | x  | x  | x  | x  | x  |
-| ch591/2    | √  | √  | √  | x  | x  | x  |
-| ch23v208   | √  | √  | √  | x  | x  | x  |
+| ch591/2    | √  | √  | √  | √  | x  | x  |
+| ch23v208   | √  | √  | √  | √  | x  | x  |
 
 \* ch571/3 is a completely different creature in many respects, and iSLER support is very challenging. Current state is that
 the core init seems ok, but TX does not work and RX seems to receive but since DMA has to be handled manually here
@@ -27,6 +26,8 @@ I don't know where to pull the frame data from. It's possible the TX issues are 
 is also sus.
 
 ### Links for low-cost dev boards:
+If you don't know which one to get, the ch582 from quason (the first ch573/ch582 link) is the cheapest and supports Long Range Coded Phy (S2/S8).
+
 CH570/2: \
 https://vi.aliexpress.com/item/1005009123215735.html \
 https://vi.aliexpress.com/item/1005009071651737.html
