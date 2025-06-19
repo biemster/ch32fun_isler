@@ -56,8 +56,7 @@
 #define DEVSETMODE_RX      0x00d9
 #define CTRL_CFG_PHY_1M    ((BB->CTRL_CFG & 0xffff0fff) | 0x1000)
 #define CTRL_CFG_PHY_2M    (BB->CTRL_CFG & 0xffff0fff)
-#define CTRL_CFG_PHY_S2    ((BB->CTRL_CFG & 0xffff0fff) | 0x4000)
-#define CTRL_CFG_PHY_S8    ((BB->CTRL_CFG & 0xffff0fff) | 0x2000)
+#define CTRL_CFG_PHY_CODED ((BB->CTRL_CFG & 0xffff0fff) | 0x2000)
 #define LL_STATUS_TX       0x2000
 #define CTRL_CFG_START_TX  0x800000
 #elif defined(CH59x) && (MCU_PACKAGE == 1 || MCU_PACKAGE == 2)
@@ -94,8 +93,7 @@
 #define DEVSETMODE_RX      0x59
 #define CTRL_CFG_PHY_1M    ((BB->CTRL_CFG & 0xffff0fff) | 0x1000)
 #define CTRL_CFG_PHY_2M    (BB->CTRL_CFG & 0xffff0fff)
-#define CTRL_CFG_PHY_S2    ((BB->CTRL_CFG & 0xffff0fff) | 0x4000)
-#define CTRL_CFG_PHY_S8    ((BB->CTRL_CFG & 0xffff0fff) | 0x2000)
+#define CTRL_CFG_PHY_CODED ((BB->CTRL_CFG & 0xffff0fff) | 0x2000)
 #define LL_STATUS_TX       0x2000
 #define CTRL_CFG_START_TX  0x800000
 #else
@@ -275,9 +273,10 @@ uint8_t channel_map[] = {1,2,3,4,5,6,7,8,9,10,12,13,14,15,16,17,18,19,20,21,22,2
 #define CO_MID (uint8_t)(RF->TXTUNE_CTRL & ~0xffffffc0)
 #define GA_MID (uint8_t)((RF->TXTUNE_CTRL & ~0x80ffffff) >> 24)
 
-#define PHY_1M    1
-#define PHY_2M    2
-#define PHY_CODED 3
+#define PHY_1M 1
+#define PHY_2M 2
+#define PHY_S2 4
+#define PHY_S8 8
 
 void DevSetMode(uint16_t mode);
 __attribute__((aligned(4))) uint32_t LLE_BUF[0x110];
@@ -722,8 +721,18 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel, uint8_t phy_mode) {
 	// Wait for tuning bit to clear.
 	for( int timeout = 3000; !(RF->RF26 & 0x1000000) && timeout >= 0; timeout-- );
 
+#if defined(CH582_CH583) || defined(CH32V208)
+	BB->CTRL_CFG = (phy_mode == PHY_2M) ? CTRL_CFG_PHY_2M:
+				   (phy_mode == PHY_S2) ? CTRL_CFG_PHY_CODED:
+				   (phy_mode == PHY_S8) ? CTRL_CFG_PHY_CODED:
+										  CTRL_CFG_PHY_1M; // default 1M for now
+	if(phy_mode > PHY_2M) { // coded phy
+		BB->CTRL_CFG = (BB->CTRL_CFG & 0xffff3fff) | ((phy_mode == PHY_S2) ? 0x4000 : 0);
+	}
+#else
 	BB->CTRL_CFG = (phy_mode == PHY_2M) ? CTRL_CFG_PHY_2M:
 										  CTRL_CFG_PHY_1M; // default 1M for now
+#endif
 
 #if defined(CH570_CH572)
 	BB->BB9 = (BB->BB9 & 0xf9ffffff) | ((phy_mode == PHY_2M) ? 0 : 0x2000000);
@@ -739,7 +748,7 @@ void Frame_TX(uint8_t adv[], size_t len, uint8_t channel, uint8_t phy_mode) {
 #if !defined(CH571_CH573)
 	LL->STATUS = LL_STATUS_TX;
 #endif
-	LL->TMR = (uint32_t)(((len *8) + 0xee) *2);
+	LL->TMR = (uint32_t)(len *512); // needs optimisation, per phy mode
 
 	BB->CTRL_CFG |= CTRL_CFG_START_TX;
 	BB->CTRL_TX &= 0xfffffffc;
@@ -765,8 +774,18 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel, uint8_t phy_mode) {
 	DevSetChannel(channel);
 	DevSetMode(DEVSETMODE_RX);
 
+#if defined(CH582_CH583) || defined(CH32V208)
+	BB->CTRL_CFG = (phy_mode == PHY_2M) ? CTRL_CFG_PHY_2M:
+				   (phy_mode == PHY_S2) ? CTRL_CFG_PHY_CODED:
+				   (phy_mode == PHY_S8) ? CTRL_CFG_PHY_CODED:
+										  CTRL_CFG_PHY_1M; // default 1M for now
+	if(phy_mode > PHY_2M) { // coded phy
+		BB->CTRL_CFG = (BB->CTRL_CFG & 0xffff3fff) | ((phy_mode == PHY_S2) ? 0x4000 : 0);
+	}
+#else
 	BB->CTRL_CFG = (phy_mode == PHY_2M) ? CTRL_CFG_PHY_2M:
 										  CTRL_CFG_PHY_1M; // default 1M for now
+#endif
 
 #ifdef CH570_CH572
 	BB->BB9 = (BB->BB9 & 0xf9ffffff) | ((phy_mode == PHY_2M) ? 0 : 0x2000000);
@@ -776,12 +795,16 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel, uint8_t phy_mode) {
 #elif defined(CH571_CH573)
 	BB->BB11 = (BB->BB11 & 0xfffffffc) | 2; // no |2 for TX
 #elif defined(CH582_CH583) || defined(CH32V208)
-	BB->BB4 = 0x3722d0; // ch32v208: 0x3222d0
-	BB->BB5 = 0x8101901;
-	BB->BB6 = 0x31624;
-	BB->BB8 = 0x90083;
+#if defined(CH582_CH583)
+	BB->BB4 = (phy_mode < PHY_S2) ? 0x3722d0 : 0x3722df;
+#elif defined(CH32V208)
+	BB->BB4 = (phy_mode < PHY_S2) ? 0x3222d0 : 0x34a4df;
+#endif
+	BB->BB5 = (phy_mode < PHY_S2) ? 0x8101901 : 0x8301ff1;
+	BB->BB6 = (phy_mode < PHY_S2) ? 0x31624 : 0x31619;
+	BB->BB8 = (phy_mode < PHY_S2) ? 0x90083 : 0x90086;
 	BB->BB9 = 0x1006310;
-	BB->BB10 = 0x28be;
+	BB->BB10 = (phy_mode < PHY_S2) ? 0x28be : 0x28de;
 #elif defined(CH591_CH592)
 	BB->BB6 = (BB->BB6 & 0xfffffc00) | ((phy_mode == PHY_2M) ? 0x13a : 0x132);
 	BB->BB4 = (BB->BB4 & 0x00ffffff) | ((phy_mode == PHY_2M) ? 0x78000000 : 0x7f000000);

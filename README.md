@@ -15,10 +15,10 @@ The 1M and 2M PHY's work on all the supported chips, and Coded Phy S2 and S8 is 
 |------------|----|----|----|----|----|----|
 | ch570/2    | √  | √  | √  | √  | x  | x  |
 | ch571/3*   | ~  | x  | ~  | x  | x  | x  |
-| ch582/3    | √  | √  | √  | √  | x  | x  |
+| ch582/3    | √  | √  | √  | √  | √  | √  |
 | ch584/5    | x  | x  | x  | x  | x  | x  |
 | ch591/2    | √  | √  | √  | √  | x  | x  |
-| ch23v208   | √  | √  | √  | √  | x  | x  |
+| ch23v208   | √  | √  | √  | √  | √  | √  |
 
 \* ch571/3 is a completely different creature in many respects, and iSLER support is very challenging. Current state is that
 the core init seems ok, but TX does not work and RX seems to receive but since DMA has to be handled manually here
