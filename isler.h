@@ -59,8 +59,12 @@
 #define CTRL_CFG_PHY_CODED ((BB->CTRL_CFG & 0xffff0fff) | 0x2000)
 #define LL_STATUS_TX       0x2000
 #define CTRL_CFG_START_TX  0x800000
-#elif defined(CH59x) && (MCU_PACKAGE == 1 || MCU_PACKAGE == 2)
+#elif (defined(CH59x) && (MCU_PACKAGE == 1 || MCU_PACKAGE == 2)) || (defined(CH58x) && (MCU_PACKAGE == 4 || MCU_PACKAGE == 5))
+#if defined(CH59x)
 #define CH591_CH592
+#elif defined(CH58x)
+#define CH584_CH585
+#endif
 #define ACCESSADDRESS1     BB2
 #define CTRL_TX            BB11
 #define TMR                LL25
@@ -152,7 +156,7 @@ typedef struct {
 	volatile uint32_t BB8;
 	volatile uint32_t BB9;
 	volatile uint32_t BB10;
-	volatile uint32_t BB11; // ch582/3, ch591/2: CTRL_TX
+	volatile uint32_t BB11; // ch582/3, ch584/5, ch591/2: CTRL_TX
 	volatile uint32_t BB12;
 
 	// default, pre TX is a4000009
@@ -378,7 +382,7 @@ void DevInit(uint8_t TxPower) {
 	LL->LL13 = 0x8c;
 	LL->LL17 = 0x50;
 	LL->LL19 = 10;
-#elif defined(CH570_CH572) || defined(CH582_CH583) || defined(CH591_CH592)
+#elif defined(CH570_CH572) || defined(CH582_CH583) || defined(CH584_CH585) || defined(CH591_CH592)
 	LL->LL5 = 0x8c;
 	LL->LL7 = 0x76;
 	LL->LL9 = 0x8c;
@@ -411,6 +415,12 @@ void DevInit(uint8_t TxPower) {
 	LL->LL11 = 0x3c;
 	LL->LL15 = 0x3c;
 	LL->INT_EN = 0xf00f;
+#elif defined(CH584_CH585)
+	LL->LL11 = 0x6e;
+	LL->LL15 = 0x6e;
+	LL->LL1 &= 0xffffffe1;
+	LL->LL21 = 0;
+	LL->INT_EN = 0x1f000f;
 #elif defined(CH591_CH592)
 	LL->LL6 = 0x78;
 	LL->LL8 = 0xffffffff;
@@ -491,19 +501,20 @@ void DevInit(uint8_t TxPower) {
 
 	// NVIC->VTFADDR[3] = (uint32_t)BB_IRQHandler +0x20000000; // why 20000000?
 #endif
-#elif defined(CH591_CH592)
+#elif defined(CH584_CH585) || defined(CH591_CH592)
 	RF->RF12 = (RF->RF12 & 0x8fffffff) | 0x10077700;
 	RF->RF15 = (RF->RF15 & 0x18ff0fff) | 0x42005000;
-	RF->RF19 &= 0xfffffff8;
+	RF->RF19 &= 0xfffcff88;
 	RF->RF21 = (RF->RF21 & 0xfffffff0) | 9;
 	RF->RF23 &= 0xff88ffff;
 
 	BB->CTRL_CFG |= 0x800000;
+	BB->BB14 = 0x3ff; // ch584/5
 	BB->BB13 = 0x50;
 	BB->CTRL_TX = (BB->CTRL_TX & 0x81ffffff) | (TxPower & 0x3f) << 0x19;
 	uint32_t uVar3 = 0x1000000;
 	uint32_t uVar4 = RF->RF23 & 0xf8ffffff;
-	if(TxPower < 29) {
+	if(TxPower < 29) { // ch585: 27
 		/* uVar3 and uVar4 are initialized properly already */
 	}
 	else if(TxPower < 35) {
@@ -517,6 +528,7 @@ void DevInit(uint8_t TxPower) {
 		uVar3 = 0x7000000;
 	}
 	RF->RF23 = uVar4 | uVar3;
+	BB->BB15 = 0x2020c; // ch584/5
 	BB->BB4 = (BB->BB4 & 0xffffffc0) | 0xe;
 #endif
 
@@ -673,7 +685,7 @@ void RegInit() {
 }
 
 void RFCoreInit(uint8_t TxPower) {
-#ifdef CH571_CH573 // maybe all? or none?
+#if defined(CH571_CH573) || defined(CH584_CH585) // maybe all?
 	NVIC->IENR[0] = 0x1000;
 	NVIC->IRER[0] = 0x1000;
 #endif
