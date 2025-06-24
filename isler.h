@@ -817,7 +817,7 @@ void Frame_RX(uint8_t frame_info[], uint8_t channel, uint8_t phy_mode) {
 	BB->BB8 = (phy_mode < PHY_S2) ? 0x90083 : 0x90086;
 	BB->BB9 = 0x1006310;
 	BB->BB10 = (phy_mode < PHY_S2) ? 0x28be : 0x28de;
-#elif defined(CH591_CH592)
+#elif defined(CH584_CH585) || defined(CH591_CH592)
 	BB->BB6 = (BB->BB6 & 0xfffffc00) | ((phy_mode == PHY_2M) ? 0x13a : 0x132);
 	BB->BB4 = (BB->BB4 & 0x00ffffff) | ((phy_mode == PHY_2M) ? 0x78000000 : 0x7f000000);
 #endif
